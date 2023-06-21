@@ -1,0 +1,200 @@
+#! python3
+# A program that checks the database made in 'birthday-tracker' and subsequently sends a happy birthday email to the birthday
+# person on the date of their birthday and sends everyone else a reminder email one week before and on the day of their birthday.
+
+import calendar
+import re
+import shelve
+import smtplib
+from datetime import date
+from collections import Counter
+
+months = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7,
+          "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+
+# Sets the year of upcoming birthdays.
+today = date.today()
+current_year = today.year
+birthday_year = today.year
+first_day_of_next_year = date(today.year + 1, 1, 1)
+days_until_next_year = (first_day_of_next_year - today).days
+if days_until_next_year <= 7:
+    birthday_year += 1
+if days_until_next_year > 7:
+    birthday_year = today.year
+
+# Regular expression for matching the dates in birthday.py
+first_2_digits_regex = re.compile(r"^\d{1,2}")
+months_regex = re.compile(r"[a-z]{3}$")
+
+birthday_file = shelve.open('birthdays') # Open stored shelf file.
+
+try:
+    birthdays = birthday_file['birthdays']
+except KeyError:
+    birthdays = {}
+
+try:
+    emails = birthday_file['emails']
+except KeyError:
+    emails = {}
+
+try:
+    has_not_run = birthday_file['has_not_run']
+except KeyError:
+    has_not_run = {}
+    has_not_run[today] = False
+    has_not_run_today = has_not_run[today]
+try:
+    has_not_run_today = has_not_run[today]
+except KeyError:
+    has_not_run[today] = False
+    has_not_run_today = has_not_run[today]
+
+
+# Creates empty dictionaries to store the birthdays that occur today.
+birthday_email_dic = {}
+birthday_reminder_email_dic = {}
+one_week_reminder_email_dic = {}
+
+
+# Send the birthday person a happy birthday email!
+def send_birthday_email(birthday_names):
+    for name in birthday_names:
+        content = "\r\n".join([
+            "From: anhivu120@gmail.com",
+            "To: %s" % birthday_names[name],
+            "Subject: Happy Birthday",
+            "",
+            "Hello " + name.title() + "!",
+            "",
+            "Happy birthday!",
+            "I hope today is a fun and enjoyable day for you!",
+            "",
+            "Love,",
+            "Anthony Hien Vu"
+            ])
+
+        mail = smtplib.SMTP("smtp.gmail.com", 587)
+        mail.ehlo()
+        mail.starttls()
+        mail.login("anhivu120@gmail.com", "KTfneu973")
+        mail.sendmail("anhivu120@gmail.com", birthday_names[name], content)
+        mail.close()
+
+
+# Send everyone but the birthday person an email reminder of their birthday one week before and on the day of their birthday!
+def send_reminder_email(birthday_names, reminder=''):
+    # If optional third argument of function (reminder) is either False or None.
+    # Emails a reminder of someone's birthday to everyone but the birthday person one week prior to their birthday.
+    if not reminder:
+        reminder_msg = ""  # Create a one week reminder message to all email recipients except the birthday person.
+        reminder_emails = list(emails.keys())
+        for name in sorted(list(birthday_names.keys())):
+            if name in reminder_emails and len(birthday_names) == 1:
+                reminder_emails.remove(name)
+            reminder_msg += ("It is " + name.title() + "'s birthday in exactly one week on " +
+                             calendar.day_name[birthday_names[name].weekday()].title() + ", " +
+                             str(birthday_names[name].day) + " " + calendar.month_name[birthday_names[name].month].title()
+                             + " " + str(birthday_names[name].year) + ".\n")
+        for name in reminder_emails:
+            if name in birthday_names: # Remove birthday person from the reminder email list so they're not reminded of their own birthday.
+                reminder_msg_list = reminder_msg.split("\n")
+                remove_reminder_msg_list = []
+                for msg in reminder_msg_list:
+                    if name.title() in msg:
+                        remove_reminder_msg_list.append(msg)
+                reminder_msg_list = list((Counter(reminder_msg_list-remove_reminder_msg_list)).elements())
+                reminder_msg = "\n".join(reminder_msg_list) + "\n"
+            content = "\r\n".join([
+                "From: anhivu120@gmail.com",
+                "To: %s" % emails[name],
+                "Subject: Birthday Reminder",
+                "",
+                "Hello " + name.title() + "!",
+                "",
+                "This is just a reminder.",
+                reminder_msg,
+                "Love,",
+                "Anthony Hien Vu"
+                ])
+            mail = smtplib.SMTP("smtp.gmail.com", 587)
+            mail.ehlo()
+            mail.starttls()
+            mail.login("anhivu120@gmail.com", "KTfneu973")
+            mail.sendmail("anhivu120@gmail.com", emails[name], content)
+            mail.close()
+
+    # If optional third argument of function (reminder) is neither False or None.
+    # Emails a reminder that it's someone's birthday today to everyone but the birthday person.
+    else:
+        birthday_msg = ""  # Create a birthday reminder message to the birthday person.
+        reminder_emails = list(emails.keys())
+        for name in sorted(list(birthday_names.keys())):
+            if name in reminder_emails and len(birthday_names) == 1:
+                reminder_emails.remove(name)
+            birthday_msg += ("It is " + name.title() + "'s birthday today!\n")
+        for name in reminder_emails:
+            if name in birthday_names:  # Remove birthday person from the reminder email list so they're not reminded of their own birthday.
+                birthday_msg_list = birthday_msg.split("\n")
+                remove_bday_msg_list = []
+                for msg in birthday_msg_list:
+                    if name.title() in msg:
+                        remove_bday_msg_list.append(msg)
+                birthday_msg_list = list((Counter(birthday_msg_list)-Counter(remove_bday_msg_list)).elements())
+                birthday_msg = "\n".join(birthday_msg_list) + "\n"
+            content = "\r\n".join([
+                    "From: anhivu120@gmail.com",
+                    "To: %s" % emails[name],
+                    "Subject: Birthday Reminder",
+                    "",
+                    "Hello " + name.title() + "!",
+                    "",
+                    "This is just a reminder.",
+                    birthday_msg,
+                    "Don't forget to wish them a happy birthday!",
+                    "",
+                    "Love,",
+                    "Anthony Hien Vu"
+                    ])
+            mail = smtplib.SMTP("smtp.gmail.com", 587)
+            mail.ehlo()
+            mail.starttls()
+            mail.login("anhivu120@gmail.com", "KTfneu973")
+            mail.sendmail("anhivu120@gmail.com", emails[name], content)
+            mail.close()
+
+
+# Function of the main program.
+def run_reminder_program():
+    for name in birthdays:
+        birthday = birthdays[name]
+        birthday_day = int(first_2_digits_regex.search(birthday).group())
+        birthday_month = months[months_regex.search(birthday).group()]
+        birthday_date = date(birthday_year, birthday_month, birthday_day)
+        days_until_birthday = (birthday_date - today).days
+        # If the birthday falls on today's date.
+        if birthday_day == today.day and birthday_month == today.month:
+            if name in emails:
+                birthday_email_dic[name] = emails[name] # Records in a dic everyone's birthday and their email.
+            birthday_reminder_email_dic[name] = birthday_date # Records in a dic everyone's birthday (one week in advance).
+        # If a birthday is one week / 7 days from today's date.
+        if days_until_birthday == 7:
+            one_week_reminder_email_dic[name] = birthday_date
+    if len(birthday_email_dic) >= 1:
+        send_birthday_email(birthday_email_dic)
+    if len(birthday_reminder_email_dic) >= 1:
+        send_reminder_email(birthday_reminder_email_dic, True)
+    if len(one_week_reminder_email_dic) >= 1:
+        send_reminder_email(one_week_reminder_email_dic, False)
+
+# Method call to run the program a maximum number of once per day (to prevent everyone in the email database being spammed with multiple
+# reminder emails in a day). The program/script needs to be scheduled to run at a particular time each day or upon computer/system 
+# start-up however it will never run more than once each day.
+if not has_not_run_today:
+    run_reminder_program()
+    has_not_run[today] = True
+    birthday_file['has_not_run'] = has_not_run
+
+
+birthday_file.close() # Close shelf file.
